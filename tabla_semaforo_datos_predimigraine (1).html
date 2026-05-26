@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PREDIMIGRAINE · Tabla semáforo de datos</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #faf8f3;
+    font-family: 'Source Serif 4', Georgia, serif;
+  }
+  .filtro-btn {
+    transition: all 0.15s ease;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border: 1px solid #1a1a1a;
+    background: transparent;
+    padding: 6px 12px;
+    color: #1a1a1a;
+  }
+  .filtro-btn:hover {
+    background: #1a1a1a;
+    color: #faf8f3;
+  }
+  .filtro-btn.activo {
+    background: #1a1a1a;
+    color: #faf8f3;
+  }
+  .export-btn {
+    transition: all 0.15s ease;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px solid #2d6a4f;
+    background: #2d6a4f;
+    color: #fff;
+    padding: 10px 18px;
+    font-weight: 600;
+  }
+  .export-btn:hover {
+    background: #1a4a37;
+    border-color: #1a4a37;
+  }
+  .export-btn.csv {
+    background: #fff;
+    color: #2d6a4f;
+  }
+  .export-btn.csv:hover {
+    background: #2d6a4f;
+    color: #fff;
+  }
+  tr.fila-dato:hover {
+    background: #f3efe4 !important;
+  }
+  .ref-source {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 6px;
+    background: #eef2f0;
+    color: #2d6a4f;
+    margin-bottom: 4px;
+    letter-spacing: 0.03em;
+    border-radius: 2px;
+  }
+  .ref-source.proyecto { background: #eef2f0; color: #2d6a4f; }
+  .ref-source.literatura { background: #f0ecf5; color: #5c4677; }
+  .ref-source.externo { background: #fef3c7; color: #7c5e10; }
+  .ref-source.no-recogido { background: #ffd7d7; color: #9b2226; }
+  @media print {
+    .no-print { display: none !important; }
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+const data = [
+  // ============ POBLACIÓN ============
+  { bloque: 'Población', variable: 'Nº pacientes incluidos / analizables', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Justificación Intermedia · pág 5-7',
+    donde: 'Borrador Justificación Intermedia (jun 2024), págs. 5-7: "A día 1 de junio se encuentran incluidos un total de 256 pacientes (230 mujeres y 26 hombres)" — PREDICGRP. Para PREDICRISIS, mismo doc, pág. 5: "se encuentran reclutados 4 controles y 6 pacientes"',
+    nota: 'Cifras a 1 jun 2024; el reclutamiento PREDICGRP se amplió hasta oct 2024' },
+  { bloque: 'Población', variable: 'Edad', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17',
+    donde: 'Solicitud PREDIMIGRAINE, pág. 17, listado de variables del CRD basal: "edad, sexo, nivel de estudios, diagnóstico, aura..."',
+    nota: 'Recogido en CRD basal vía REDCap' },
+  { bloque: 'Población', variable: 'Sexo', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17',
+    donde: 'Solicitud PREDIMIGRAINE, pág. 17. Confirmación de N por sexo en Justificación Intermedia pág. 14 (perspectiva de género): "230 pacientes mujeres de 256 pacientes reclutados"',
+    nota: '90 % mujeres en cohorte actual' },
+  { bloque: 'Población', variable: 'Tipo de migraña (ME/MEAF/MC)', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17 (variable "diagnóstico")',
+    donde: 'Solicitud PREDIMIGRAINE, pág. 17. Criterios de inclusión en pág. 16: PREDICRISIS exige MEAF (10-14 días migraña/mes); PREDICGRP exige ≥10 días migraña/mes (MEAF y MC)',
+    nota: 'Diagnóstico por neurólogo según ICHD-3' },
+  { bloque: 'Población', variable: 'Días cefalea/mes basal', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17',
+    donde: 'Solicitud PREDIMIGRAINE, pág. 17: "días de cefalea al mes" recogido en visita basal y seguimientos 3, 6, 12 m',
+    nota: 'Variable principal' },
+  { bloque: 'Población', variable: 'Días migraña/mes basal', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17',
+    donde: 'Solicitud PREDIMIGRAINE, pág. 17: "días de migraña al mes" recogido en visita basal y seguimientos',
+    nota: 'Variable principal' },
+  { bloque: 'Población', variable: 'Años de evolución', estado: 'verde', prioridad: 'media',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17',
+    donde: 'Solicitud PREDIMIGRAINE, pág. 17: "edad de inicio, tiempo de evolución de la migraña, tiempo de cronicidad en el caso de migraña crónica"',
+    nota: 'Ajuste de severidad' },
+  { bloque: 'Población', variable: 'Tratamientos preventivos previos', estado: 'verde', prioridad: 'media',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17',
+    donde: 'Solicitud PREDIMIGRAINE, pág. 17: "número de tratamientos preventivos previos, tipo de tratamiento preventivo utilizado"',
+    nota: 'Nº y tipo' },
+  { bloque: 'Población', variable: 'Uso excesivo de medicación', estado: 'verde', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17-18',
+    donde: 'Solicitud PREDIMIGRAINE, págs. 17 y 18: "uso excesivo de medicación analgésica" recogido en basal y seguimientos 3, 6, 12 m',
+    nota: 'Variable explícita' },
+  { bloque: 'Población', variable: 'Nivel de estudios', estado: 'verde', prioridad: 'media',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17',
+    donde: 'Solicitud PREDIMIGRAINE, pág. 17: "edad, sexo, nivel de estudios, diagnóstico..."',
+    nota: 'Proxy de categoría profesional' },
+  { bloque: 'Población', variable: 'Estado laboral', estado: 'rojo', prioridad: 'critica',
+    refTipo: 'no-recogido', refCorta: 'NO está en el CRD',
+    donde: 'NO aparece en el listado de variables de la pág. 17 de la Solicitud. Tampoco en la enmienda de la Justificación Intermedia (pág. 12). Referencia metodológica externa: Lazaro-Hernandez et al. 2024 (Early savings paper), Tabla 1, recoge "employed yes/no" como variable basal',
+    nota: 'IMPRESCINDIBLE: sin esto no hay costes indirectos. Añadir al CRD' },
+  { bloque: 'Población', variable: 'Jornada laboral / horas/semana', estado: 'rojo', prioridad: 'alta',
+    refTipo: 'no-recogido', refCorta: 'NO está en el CRD',
+    donde: 'NO recogido en proyecto. Referencia externa: Early savings paper (Lazaro-Hernandez 2024) recoge "Total working hours" como media 37,1 h (SD 8,2) en Tabla 1',
+    nota: 'Necesario para monetizar productividad' },
+  { bloque: 'Población', variable: 'Salario o categoría profesional', estado: 'amarillo', prioridad: 'alta',
+    refTipo: 'externo', refCorta: 'Sustituible por INE',
+    donde: 'NO recogido. Sustituto: Early savings paper utiliza "average hourly salary published by the Institute of statistics of Catalonia". Fernández-Ferro 2024 utiliza INE Encuesta de Estructura Salarial 2019 (ref. 24 del artículo)',
+    nota: 'Si no se recoge, usar salario medio municipal (método Pozo-Rosich)' },
+
+  // ============ RESULTADOS CLÍNICOS ============
+  { bloque: 'Resultados clínicos', variable: 'Días migraña/mes a 3, 6, 12 m', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 18',
+    donde: 'Solicitud PREDIMIGRAINE, pág. 18: "Se realizará una visita presencial o telefónica a los 3, 6 y 12 meses. En ella se recogerán... días de dolor al mes, días de migraña al mes..."',
+    nota: 'Seguimiento prospectivo PREDICGRP' },
+  { bloque: 'Resultados clínicos', variable: 'Días migraña/mes post-suspensión', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 18',
+    donde: 'Solicitud PREDIMIGRAINE, pág. 18: "Se mantendrá un seguimiento durante 6 meses tras la suspensión del anticuerpo antiCGRP. Se incluirán las mismas variables clínicas..."',
+    nota: 'Seguimiento 6 m tras suspensión' },
+  { bloque: 'Resultados clínicos', variable: 'Intensidad media del dolor', estado: 'verde', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Solicitud + App PREDICRISIS',
+    donde: 'Solicitud, pág. 18: "porcentajes de reducción en intensidad y frecuencia". A nivel de crisis individual: app PREDICRISIS recoge curva de dolor cada 15 min (Gago-Veiga et al. 2025, Pain Curves, J Pain Research)',
+    nota: 'Por crisis y mensual' },
+  { bloque: 'Resultados clínicos', variable: 'Duración media de las crisis', estado: 'verde', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'App PREDICRISIS (Brainguard)',
+    donde: 'Gago-Veiga et al. 2025 (Pain Curves), publicación del proyecto: clasificación en 4 tipos de curva de dolor (Type 1 Alta intensidad, Type 2 Agudo intenso, Type 3 Prolongado intenso, Type 4 Baja intensidad)',
+    nota: 'Curva de dolor cada 15 min vía app' },
+  { bloque: 'Resultados clínicos', variable: 'Días medicación aguda/mes', estado: 'amarillo', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Parcial · implícito',
+    donde: 'En la Solicitud (pág. 17-18) solo aparece "uso excesivo de medicación analgésica" (variable dicotómica). NO hay variable cuantitativa explícita "días de medicación aguda/mes". En Early savings paper sí se recoge como "Acute medication days/month, mean 12,2 (SD 6,3)"',
+    nota: 'Implícito en uso excesivo; conviene variable explícita mensual' },
+  { bloque: 'Resultados clínicos', variable: 'HIT-6 basal y seguimiento', estado: 'verde', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17-18 + enmienda',
+    donde: 'Solicitud, págs. 17-18: HIT-6 en basal y seguimientos. Justificación Intermedia, pág. 12 (enmienda): "se seleccionaron las escalas HIT-6 y BAI-BDI... HIT-6 es preferida sobre MIDAS por su simplicidad"',
+    nota: 'Elegido sobre MIDAS' },
+  { bloque: 'Resultados clínicos', variable: 'MIDAS', estado: 'rojo', prioridad: 'baja',
+    refTipo: 'no-recogido', refCorta: 'Descartado por enmienda',
+    donde: 'Justificación Intermedia, pág. 12: "La escala HIT-6 es preferida sobre MIDAS por su simplicidad y menor sesgo en pacientes no trabajadores"',
+    nota: 'Eliminado del proyecto. Quitar del plan o mapear desde HIT-6' },
+  { bloque: 'Resultados clínicos', variable: 'BAI-BDI (ansiedad/depresión)', estado: 'verde', prioridad: 'media',
+    refTipo: 'proyecto', refCorta: 'Solicitud + enmienda',
+    donde: 'Solicitud, pág. 17 (HAD ansiedad/depresión inicial) + Justificación Intermedia pág. 12: "La escala BAI-BDI se eligió por su mayor fiabilidad en la evaluación de la comorbilidad anímica, a diferencia de HADS"',
+    nota: 'Cambio HADS → BAI-BDI por enmienda' },
+  { bloque: 'Resultados clínicos', variable: 'HADS', estado: 'rojo', prioridad: 'baja',
+    refTipo: 'no-recogido', refCorta: 'Descartado por enmienda',
+    donde: 'Justificación Intermedia, pág. 12: sustituido por BAI-BDI',
+    nota: 'Descartado' },
+  { bloque: 'Resultados clínicos', variable: 'ISI (calidad sueño)', estado: 'verde', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17-18',
+    donde: 'Solicitud, pág. 17 (basal) y pág. 18 (seguimientos): "ISI" recogido. Justificación Intermedia pág. 13: "se está evaluando el impacto de las señales hemodinámicas durante el sueño en la calidad del mismo y en la aparición de crisis al día siguiente"',
+    nota: 'Clave para análisis sueño-crisis en PREDICRISIS' },
+  { bloque: 'Resultados clínicos', variable: 'Percepción global de cambio', estado: 'verde', prioridad: 'media',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 18',
+    donde: 'Solicitud, pág. 18: "porcentajes de reducción en intensidad y frecuencia, percepción global de cambio"',
+    nota: 'Recogido a 3, 6, 12 m' },
+  { bloque: 'Resultados clínicos', variable: 'Tolerabilidad / EA', estado: 'verde', prioridad: 'media',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 18 + SAFE-CGRP',
+    donde: 'Solicitud, pág. 18: "y de tolerabilidad". Complemento externo: Sanabria-Gago et al. 2025 (SAFE-CGRP), Frontiers in Neurology, perfil de seguridad anti-CGRP en pacientes con comorbilidades',
+    nota: 'Útil para complementar con datos SAFE-CGRP' },
+
+  // ============ RECURSOS SANITARIOS ============
+  { bloque: 'Recursos sanitarios', variable: 'Visitas a urgencias', estado: 'rojo', prioridad: 'critica',
+    refTipo: 'no-recogido', refCorta: 'NO está en el CRD',
+    donde: 'NO aparece como variable estructurada en pág. 17-18 de la Solicitud. Reconstruible desde historia clínica de cada hospital. Referencia metodológica: Early savings paper recoge "emergency visits" en escala HCRU (Healthcare Resource Utilization)',
+    nota: 'IMPRESCINDIBLE. Reconstruir o añadir al CRD' },
+  { bloque: 'Recursos sanitarios', variable: 'Visitas atención primaria', estado: 'rojo', prioridad: 'alta',
+    refTipo: 'no-recogido', refCorta: 'NO está en el CRD',
+    donde: 'NO recogido. Fernández-Ferro 2024 muestra que las consultas primaria son la principal fuente de coste SNS en migraña',
+    nota: 'Coste directo SNS importante' },
+  { bloque: 'Recursos sanitarios', variable: 'Visitas a neurología', estado: 'amarillo', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Inferible del protocolo',
+    donde: 'No es variable explícita, pero las visitas del estudio están programadas: basal + 3, 6, 12 m (Solicitud pág. 18) + visita adicional cada 3 m incluida en Early savings paper como coste de seguimiento (80 €/visita según Catalan Healthcare Institution)',
+    nota: 'Reconstruible de calendario del estudio + agenda hospital' },
+  { bloque: 'Recursos sanitarios', variable: 'Hospitalizaciones', estado: 'rojo', prioridad: 'media',
+    refTipo: 'no-recogido', refCorta: 'NO está en el CRD',
+    donde: 'NO recogido. Raro en migraña pero alto coste unitario',
+    nota: 'Raro en migraña pero coste elevado cuando ocurre' },
+  { bloque: 'Recursos sanitarios', variable: 'Pruebas complementarias', estado: 'amarillo', prioridad: 'media',
+    refTipo: 'proyecto', refCorta: 'Solo RM consta',
+    donde: 'Solicitud pág. 17: solo RM cerebral programada explícitamente. Otras pruebas reconstruibles de historia clínica',
+    nota: 'Solo RM del proyecto consta; resto reconstruible' },
+
+  // ============ PRODUCTIVIDAD ============
+  { bloque: 'Productividad', variable: 'WPAI o equivalente', estado: 'rojo', prioridad: 'critica',
+    refTipo: 'no-recogido', refCorta: 'NO está en el CRD',
+    donde: 'NO recogido. Metodología estándar en Early savings paper (Lazaro-Hernandez 2024): "Work productivity and activity impairment (WPAI)" en basal, M3 y M6',
+    nota: 'IMPRESCINDIBLE. Cuestionario validado (5 min/paciente)' },
+  { bloque: 'Productividad', variable: 'Días de baja laboral / absentismo', estado: 'rojo', prioridad: 'critica',
+    refTipo: 'no-recogido', refCorta: 'NO está en el CRD',
+    donde: 'NO recogido en CRD. Referencia clave: Fernández-Ferro 2024 cuantifica 22,35 días/año adicionales de absentismo en pacientes con migraña vs controles (66,9 % del exceso de coste total = 1.928 €/año)',
+    nota: 'Componente principal del exceso de coste' },
+  { bloque: 'Productividad', variable: 'Presentismo', estado: 'rojo', prioridad: 'critica',
+    refTipo: 'no-recogido', refCorta: 'NO está en el CRD',
+    donde: 'NO recogido. Fernández-Ferro 2024: 31,39 días/año adicionales de presentismo. Early savings paper: presentismo basal 42,7% del tiempo de trabajo, reducido a 24,3% tras 3 m de anti-CGRP',
+    nota: '31,4 días/año adicionales vs control' },
+
+  // ============ PREDICRISIS MODELO ============
+  { bloque: 'PREDICRISIS modelo', variable: 'Crisis registradas por paciente', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Justificación Intermedia · pág 13',
+    donde: 'Justificación Intermedia, pág. 13: "se han monitorizado 6 pacientes durante un periodo de 2 meses cada uno, con una duración ideal de 24 horas diarias". Sistema: wearable Embrace Plus + Brainguard APP',
+    nota: 'Base de cálculo del modelo' },
+  { bloque: 'PREDICRISIS modelo', variable: 'Crisis predichas correctamente (TP)', estado: 'amarillo', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'En desarrollo · Justificación Intermedia pág 13',
+    donde: 'Justificación Intermedia, pág. 13: "se están analizando horizontes de predicción de las crisis de migraña de 2 horas". Modelo en desarrollo con redes neuronales recurrentes',
+    nota: 'Horizonte 2 h en análisis intermedio' },
+  { bloque: 'PREDICRISIS modelo', variable: 'Falsos positivos / negativos', estado: 'amarillo', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Pendiente · salida del modelo ML',
+    donde: 'Salida obligatoria del trabajo del ingeniero (Solicitud pág. 38: ingeniero "encargado de la generación y verificación del algoritmo de predicción para cada paciente")',
+    nota: 'Reservar variables resumen' },
+  { bloque: 'PREDICRISIS modelo', variable: 'Sensibilidad / especificidad / VPP / VPN', estado: 'amarillo', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Pendiente del análisis ML',
+    donde: 'No reportadas aún en Justificación Intermedia. Solicitud pág. 18 menciona TensorFlow + CNN/LSTM como herramientas de modelado',
+    nota: 'Salida obligatoria del trabajo del ingeniero' },
+  { bloque: 'PREDICRISIS modelo', variable: 'Tiempo medio de anticipación', estado: 'amarillo', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Pendiente',
+    donde: 'Definible a partir del horizonte de 2 h declarado en Justificación Intermedia pág. 13',
+    nota: 'Mide utilidad clínica real' },
+  { bloque: 'PREDICRISIS modelo', variable: 'Adherencia / horas uso wearable', estado: 'verde', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Datos brutos del wearable',
+    donde: 'Implícito en los datos brutos del wearable Embrace. Justificación Intermedia pág. 13: "una duración ideal de 24 horas diarias"',
+    nota: 'Calculable a partir de datos brutos' },
+  { bloque: 'PREDICRISIS modelo', variable: 'Fallos técnicos / pérdida de datos', estado: 'rojo', prioridad: 'media',
+    refTipo: 'no-recogido', refCorta: 'No estructurado',
+    donde: 'Mencionado cualitativamente en Justificación Intermedia pág. 13 ("dificultades para adquirir los dispositivos") pero no como variable cuantitativa',
+    nota: 'Conviene variable explícita para escalabilidad' },
+  { bloque: 'PREDICRISIS modelo', variable: 'Cronificación evitada (real o modelizada)', estado: 'rojo', prioridad: 'critica',
+    refTipo: 'no-recogido', refCorta: 'A modelizar',
+    donde: 'N muy bajo (6 pacientes a jun 2024, Justificación Intermedia pág. 5) impide medición directa. Modelizar desde reducción MHD usando literatura. Solicitud pág. 13 establece la hipótesis: predicción precoz → menos cronificación',
+    nota: 'Modelizar desde reducción de MHD' },
+
+  // ============ PREDICGRP MODELO ============
+  { bloque: 'PREDICGRP modelo', variable: 'Respondedor / no respondedor', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 18',
+    donde: 'Solicitud pág. 18: variables de efectividad recogidas a 3, 6, 12 m incluyen "porcentajes de reducción en intensidad y frecuencia". Definición habitual: >50% reducción MHD (Early savings paper)',
+    nota: 'Definible por reducción MHD' },
+  { bloque: 'PREDICGRP modelo', variable: 'Respuesta mantenida tras suspensión', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 15 (objetivo 2)',
+    donde: 'Solicitud pág. 15, objetivo específico 2: "Cuantificar la proporción de pacientes que presentan una respuesta mantenida tras la suspensión del anticuerpo antiCGRP". Seguimiento 6 m post (pág. 18)',
+    nota: 'Objetivo específico del estudio' },
+  { bloque: 'PREDICGRP modelo', variable: 'Tiempo hasta recaída', estado: 'verde', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 15 (objetivo 2)',
+    donde: 'Solicitud pág. 15: "Determinar el tiempo hasta la recaída tras la suspensión del anticuerpo monoclonal antiCGRP en aquellos pacientes que, habiendo presentado una respuesta inicial positiva, lo suspenden"',
+    nota: 'Objetivo específico del estudio' },
+  { bloque: 'PREDICGRP modelo', variable: 'Matriz de clasificación del modelo ML', estado: 'amarillo', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Pendiente · salida del modelo',
+    donde: 'Salida del trabajo del ingeniero (Solicitud pág. 38) y del análisis ML descrito en pág. 18 (CNN, GNN, TensorFlow)',
+    nota: 'Lo más importante para coste-beneficio' },
+  { bloque: 'PREDICGRP modelo', variable: 'AUC / accuracy / F1', estado: 'amarillo', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Pendiente',
+    donde: 'Métricas estándar del análisis ML descrito en Solicitud pág. 18',
+    nota: 'Métricas globales del modelo' },
+  { bloque: 'PREDICGRP modelo', variable: 'Probabilidad individual de respuesta', estado: 'amarillo', prioridad: 'media',
+    refTipo: 'proyecto', refCorta: 'Pendiente',
+    donde: 'Salida del modelo predictivo descrito en Solicitud pág. 18',
+    nota: 'Para estratificación' },
+
+  // ============ BIOMARCADORES ============
+  { bloque: 'Biomarcadores', variable: 'CGRP alfa/beta basal', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Justificación Intermedia · pág 5',
+    donde: 'Justificación Intermedia, pág. 5: "determinaciones basales de CGRP alfa y beta de 173 pacientes". Análisis en Hospital Universitario Marqués de Valdecilla',
+    nota: 'Avanzado: n=173' },
+  { bloque: 'Biomarcadores', variable: 'CGRP a 6 meses', estado: 'amarillo', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Justificación Intermedia · pág 5',
+    donde: 'Justificación Intermedia, pág. 5: "y de 26 pacientes a los 6 meses de tratamiento". En curso',
+    nota: 'En curso: n=26' },
+  { bloque: 'Biomarcadores', variable: 'CGRP a 45 días post-suspensión', estado: 'amarillo', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Justificación Intermedia · pág 12 (enmienda)',
+    donde: 'Justificación Intermedia, pág. 12, enmienda metodológica: "extracción de una muestra sanguínea... 45 días después de la última dosis del tratamiento, dado que el fármaco tiene un efecto prolongado de 30 días"',
+    nota: 'Planificado por enmienda; sustituye 4ª extracción original' },
+  { bloque: 'Biomarcadores', variable: 'Amilina', estado: 'amarillo', prioridad: 'media',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17',
+    donde: 'Solicitud pág. 17: "extracción sanguínea para medición de CGRP total, CGRP alfa y CGRP beta, amilina, GWAS y de microRNA". Análisis en Valdecilla',
+    nota: 'En curso' },
+  { bloque: 'Biomarcadores', variable: 'miRNA (RNA-seq + PCR digital)', estado: 'rojo', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Justificación Intermedia · pág 10',
+    donde: 'Justificación Intermedia, pág. 10: "Hasta la fecha, no se ha llevado a cabo el análisis genómico de las muestras, que incluye el estudio de la metilación y el análisis de miRNA. Este proceso se ha programado para realizarse en el año 2025, una vez que se haya completado el reclutamiento"',
+    nota: 'Tras cierre de reclutamiento. HULP' },
+  { bloque: 'Biomarcadores', variable: 'GWAS / metilación DNA', estado: 'rojo', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Justificación Intermedia · pág 10',
+    donde: 'Justificación Intermedia, pág. 10: mismo párrafo que miRNA, planificado para 2025. Análisis en Hospital Vall d\'Hebron (Solicitud pág. 24)',
+    nota: 'Pendiente de cierre reclutamiento' },
+  { bloque: 'Biomarcadores', variable: 'RM cerebral', estado: 'verde', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Justificación Intermedia · pág 5',
+    donde: 'Justificación Intermedia pág. 5: "144 se han realizado la resonancia magnética". Análisis automatizado en Hospital Clínico Universitario de Valladolid',
+    nota: 'Avanzado: n=144' },
+
+  // ============ COSTES ============
+  { bloque: 'Costes', variable: 'Anti-CGRP utilizado y dosis', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 18 ("tipo de anticuerpo")',
+    donde: 'Solicitud pág. 18: "tipo de anticuerpo" recogido. Referencia externa de prevalencias en cohorte similar: Early savings paper, Tabla 1: Erenumab 62,8%, Galcanezumab 23%, Fremanezumab 14,2%',
+    nota: 'Variable recogida' },
+  { bloque: 'Costes', variable: 'Duración del tratamiento', estado: 'verde', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 17',
+    donde: 'Solicitud pág. 17: "Se realizará un seguimiento de 12 meses con el tratamiento y de otros 6 meses una vez suspendido"',
+    nota: '12 meses + 6 m suspensión' },
+  { bloque: 'Costes', variable: 'Precio mensual real anti-CGRP (SNS)', estado: 'amarillo', prioridad: 'critica',
+    refTipo: 'externo', refCorta: 'Sustituible · Early savings paper',
+    donde: 'NO en proyecto. Early savings paper utiliza "prices of the anti-CGRP MAbs as medication notified prices from the Spanish National Drug Registry of the Ministry of Health" → 453,67 €/mes para los 3 anti-CGRP (promedio)',
+    nota: 'Solicitable a farmacia hospitalaria o usar referencia 453,67 €/mes' },
+  { bloque: 'Costes', variable: 'Coste unitario biomarcadores (tabla)', estado: 'amarillo', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 36 (presupuesto)',
+    donde: 'Solicitud pág. 36: wearables 1.500 €/u (45.000 €/30 unidades), RM 303 €/paciente (15.150 €/50 pac), miRNA 91.668 € material + 32.000 € SmallRNA CNIC, app 50.000 €, consultoría protección datos 7.000 €, coordinación 75.000 €, estudio impacto económico 15.000 €',
+    nota: 'Reconstruible de presupuesto detallado' },
+  { bloque: 'Costes', variable: 'Coste wearable + app + plataforma', estado: 'amarillo', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 36',
+    donde: 'Solicitud pág. 36: wearable Embrace 1.500 €/u × 30 unidades = 45.000 €. App + portal web 50.000 €. Para análisis económico hay que ANUALIZAR el wearable por nº esperado de usos (no imputar 1.500 € por paciente)',
+    nota: 'Anualizar wearable por nº usos esperados' },
+  { bloque: 'Costes', variable: 'Coste personal (neurólogo, enfermería, ingeniero)', estado: 'amarillo', prioridad: 'alta',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 36-38',
+    donde: 'Solicitud pág. 36-38: Study coordinator 114.000 €/3 años, Ingeniero 114.000 €/3 años, Enfermería (15h/sem) 34.875 €/3 años. Total personal: 262.875 € en 3 años',
+    nota: 'Estimable a partir del presupuesto del proyecto' },
+  { bloque: 'Costes', variable: 'Coste protección de datos', estado: 'verde', prioridad: 'baja',
+    refTipo: 'proyecto', refCorta: 'Solicitud · pág 36',
+    donde: 'Solicitud pág. 36: "Consultoría protección de datos: 7.000 €" para 3 años',
+    nota: 'Conocido y cerrado' },
+
+  // ============ COSTE-UTILIDAD ============
+  { bloque: 'Coste-utilidad', variable: 'EQ-5D-5L', estado: 'rojo', prioridad: 'alta',
+    refTipo: 'no-recogido', refCorta: 'NO está en el CRD',
+    donde: 'NO recogido en proyecto. Alternativa propuesta por la propia Solicitud (sección economía): ponderación por días de migraña',
+    nota: 'Hueco conocido. Alternativa: ponderación por días migraña' },
+  { bloque: 'Coste-utilidad', variable: 'Utilidad ponderada por días migraña', estado: 'amarillo', prioridad: 'critica',
+    refTipo: 'proyecto', refCorta: 'Endosado por la Solicitud',
+    donde: 'La propia Solicitud sugiere este enfoque ante la ausencia de EQ-5D. Necesita referencias bibliográficas de utilidades base (Stafford, Gillard, etc.)',
+    nota: 'Método ya endosado por la Solicitud' },
+  { bloque: 'Coste-utilidad', variable: 'Mapeo HIT-6 → utilidad', estado: 'amarillo', prioridad: 'media',
+    refTipo: 'literatura', refCorta: 'Algoritmos publicados',
+    donde: 'NO en proyecto, pero existen algoritmos publicados de mapeo HIT-6 a EQ-5D (Gillard et al.). Aplicable a los datos de HIT-6 que sí se recogen',
+    nota: 'Algoritmos publicados disponibles' },
+
+  // ============ IMPACTO SNS ============
+  { bloque: 'Impacto SNS', variable: 'Prevalencia migraña / MEAF / MC España', estado: 'verde', prioridad: 'critica',
+    refTipo: 'literatura', refCorta: 'Fernández-Ferro 2024 + Solicitud pág 30',
+    donde: 'Fernández-Ferro et al. 2024 (incluido en literatura del proyecto): cohorte representativa nacional 1.442 pacientes EHSS 2020. Solicitud pág. 30: "España, afecta a más de 5 millones de personas"',
+    nota: 'Disponible en literatura del proyecto' },
+  { bloque: 'Impacto SNS', variable: 'Coste anual por paciente con migraña', estado: 'verde', prioridad: 'critica',
+    refTipo: 'literatura', refCorta: 'Fernández-Ferro 2024',
+    donde: 'Fernández-Ferro 2024, abstract y resultados: PPPY 5.862 € en migraña vs 2.981 € sin migraña; exceso 2.881 € (IC 95% 2.410-3.353); 1.928 € laboral + 836 € sanitario SNS',
+    nota: '5.862 € total, exceso 2.881 €' },
+  { bloque: 'Impacto SNS', variable: 'Ahorro proyectado anti-CGRP por paciente', estado: 'verde', prioridad: 'alta',
+    refTipo: 'literatura', refCorta: 'Lazaro-Hernandez 2024 (Early savings)',
+    donde: 'Early savings paper, Tabla 3 y conclusiones: 159,8 €/paciente de ahorro a 3 m, 639,2 €/paciente/año proyectado. Cohorte n=148 trabajadores activos',
+    nota: '159,8 € a 3 m, 639,2 €/año' },
+  { bloque: 'Impacto SNS', variable: 'Nº pacientes candidatos anti-CGRP España', estado: 'amarillo', prioridad: 'alta',
+    refTipo: 'externo', refCorta: 'Solicitable a SEN',
+    donde: 'NO en proyecto directamente. Estimable de prevalencia × criterios SNS (≥8 días migraña/mes y ≥3 fallos terapéuticos previos)',
+    nota: 'Estimar de prevalencia o solicitar a SEN' },
+  { bloque: 'Impacto SNS', variable: 'Tasa de adopción / escenarios', estado: 'rojo', prioridad: 'media',
+    refTipo: 'no-recogido', refCorta: 'A definir',
+    donde: 'NO definido. Recomendación: modelar 3 escenarios (conservador 20%, base 50%, optimista 80% de unidades de cefaleas adoptantes)',
+    nota: 'Modelar 3 escenarios' },
+];
+
+const estadoConfig = {
+  verde: { color: '#2d6a4f', bg: '#d8f3dc', label: 'Disponible' },
+  amarillo: { color: '#7c5e10', bg: '#fef3c7', label: 'Parcial / Pendiente' },
+  rojo: { color: '#9b2226', bg: '#ffd7d7', label: 'No disponible' },
+};
+
+const prioridadConfig = {
+  critica: { color: '#9b2226', label: 'Crítica' },
+  alta: { color: '#bc6c25', label: 'Alta' },
+  media: { color: '#606c38', label: 'Media' },
+  baja: { color: '#8a8a8a', label: 'Baja' },
+};
+
+const refTipoConfig = {
+  proyecto: 'proyecto',
+  literatura: 'literatura',
+  externo: 'externo',
+  'no-recogido': 'no-recogido',
+};
+
+function exportToCSV(rows) {
+  const headers = ['Bloque', 'Variable', 'Estado', 'Prioridad', 'Referencia corta', 'Dónde encontrarlo (detallado)', 'Nota'];
+  const lines = [headers.join(';')];
+  rows.forEach(r => {
+    const fields = [
+      r.bloque,
+      r.variable,
+      estadoConfig[r.estado].label,
+      prioridadConfig[r.prioridad].label,
+      r.refCorta,
+      r.donde,
+      r.nota,
+    ].map(f => {
+      const v = String(f ?? '').replace(/"/g, '""');
+      return `"${v}"`;
+    });
+    lines.push(fields.join(';'));
+  });
+  const csv = '\uFEFF' + lines.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `predimigraine_tabla_semaforo_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportToExcel(rows) {
+  const exportData = rows.map(r => ({
+    'Bloque': r.bloque,
+    'Variable': r.variable,
+    'Estado': estadoConfig[r.estado].label,
+    'Prioridad': prioridadConfig[r.prioridad].label,
+    'Referencia corta': r.refCorta,
+    'Dónde encontrarlo (detallado)': r.donde,
+    'Nota': r.nota,
+  }));
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  ws['!cols'] = [
+    { wch: 22 },
+    { wch: 42 },
+    { wch: 20 },
+    { wch: 12 },
+    { wch: 35 },
+    { wch: 70 },
+    { wch: 50 },
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Tabla semáforo');
+  XLSX.writeFile(wb, `predimigraine_tabla_semaforo_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function App() {
+  const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [filtroPrioridad, setFiltroPrioridad] = useState('todos');
+  const [filtroBloque, setFiltroBloque] = useState('todos');
+  const [filaExpandida, setFilaExpandida] = useState(null);
+
+  const bloques = ['todos', ...Array.from(new Set(data.map(d => d.bloque)))];
+
+  const datosFiltrados = useMemo(() => {
+    return data.filter(d => {
+      if (filtroEstado !== 'todos' && d.estado !== filtroEstado) return false;
+      if (filtroPrioridad !== 'todos' && d.prioridad !== filtroPrioridad) return false;
+      if (filtroBloque !== 'todos' && d.bloque !== filtroBloque) return false;
+      return true;
+    });
+  }, [filtroEstado, filtroPrioridad, filtroBloque]);
+
+  const stats = useMemo(() => {
+    const total = data.length;
+    const verde = data.filter(d => d.estado === 'verde').length;
+    const amarillo = data.filter(d => d.estado === 'amarillo').length;
+    const rojo = data.filter(d => d.estado === 'rojo').length;
+    const criticasFaltantes = data.filter(d => d.prioridad === 'critica' && d.estado === 'rojo').length;
+    return { total, verde, amarillo, rojo, criticasFaltantes };
+  }, []);
+
+  const bloquesAgrupados = useMemo(() => {
+    const grupos = {};
+    datosFiltrados.forEach(d => {
+      if (!grupos[d.bloque]) grupos[d.bloque] = [];
+      grupos[d.bloque].push(d);
+    });
+    return grupos;
+  }, [datosFiltrados]);
+
+  return (
+    <div style={{
+      maxWidth: '1280px',
+      margin: '0 auto',
+      padding: '32px 24px',
+      color: '#1a1a1a',
+    }}>
+      <header style={{ borderBottom: '2px solid #1a1a1a', paddingBottom: '20px', marginBottom: '32px' }}>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '8px', color: '#666' }}>
+          PREDIMIGRAINE · PMP22/00158 · Evaluación económica
+        </div>
+        <h1 style={{ fontSize: '38px', fontWeight: 700, margin: '0 0 8px 0', lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+          Tabla semáforo de datos
+        </h1>
+        <p style={{ fontSize: '16px', color: '#555', margin: 0, fontStyle: 'italic' }}>
+          Disponibilidad, prioridad y trazabilidad documental de las variables para el análisis económico
+        </p>
+        <p style={{ fontSize: '13px', color: '#888', marginTop: '12px', marginBottom: 0 }}>
+          Toca en cualquier fila para ver la referencia completa de dónde encontrar el dato
+        </p>
+      </header>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '24px' }}>
+        {[
+          { label: 'Variables totales', value: stats.total, color: '#1a1a1a' },
+          { label: 'Disponibles', value: stats.verde, color: '#2d6a4f' },
+          { label: 'Parciales', value: stats.amarillo, color: '#7c5e10' },
+          { label: 'No disponibles', value: stats.rojo, color: '#9b2226' },
+          { label: 'Críticas faltantes', value: stats.criticasFaltantes, color: '#9b2226', highlight: true },
+        ].map((s, i) => (
+          <div key={i} style={{
+            padding: '16px',
+            background: s.highlight ? '#9b2226' : '#fff',
+            color: s.highlight ? '#fff' : s.color,
+            border: s.highlight ? 'none' : '1px solid #ddd',
+          }}>
+            <div style={{ fontSize: '32px', fontWeight: 700, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '6px', opacity: s.highlight ? 0.9 : 0.7 }}>
+              {s.label}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="no-print" style={{ marginBottom: '24px', padding: '16px', background: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ color: '#faf8f3', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          Exportar {datosFiltrados.length === data.length ? 'todos los datos' : `${datosFiltrados.length} filas filtradas`}
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button className="export-btn csv" onClick={() => exportToCSV(datosFiltrados)}>↓ CSV</button>
+          <button className="export-btn" onClick={() => exportToExcel(datosFiltrados)}>↓ Excel</button>
+          <button className="export-btn csv" onClick={() => window.print()}>⎙ Imprimir / PDF</button>
+        </div>
+      </div>
+
+      <div className="no-print" style={{ marginBottom: '24px', padding: '16px', background: '#fff', border: '1px solid #ddd' }}>
+        <div style={{ marginBottom: '12px' }}>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#666', marginRight: '12px' }}>Estado:</span>
+          {['todos', 'verde', 'amarillo', 'rojo'].map(e => (
+            <button key={e} className={`filtro-btn ${filtroEstado === e ? 'activo' : ''}`} onClick={() => setFiltroEstado(e)} style={{ marginRight: '6px' }}>
+              {e === 'todos' ? 'Todos' : estadoConfig[e].label}
+            </button>
+          ))}
+        </div>
+        <div style={{ marginBottom: '12px' }}>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#666', marginRight: '12px' }}>Prioridad:</span>
+          {['todos', 'critica', 'alta', 'media', 'baja'].map(p => (
+            <button key={p} className={`filtro-btn ${filtroPrioridad === p ? 'activo' : ''}`} onClick={() => setFiltroPrioridad(p)} style={{ marginRight: '6px' }}>
+              {p === 'todos' ? 'Todas' : prioridadConfig[p].label}
+            </button>
+          ))}
+        </div>
+        <div>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#666', marginRight: '12px' }}>Bloque:</span>
+          {bloques.map(b => (
+            <button key={b} className={`filtro-btn ${filtroBloque === b ? 'activo' : ''}`} onClick={() => setFiltroBloque(b)} style={{ marginRight: '6px', marginBottom: '4px' }}>
+              {b === 'todos' ? 'Todos' : b}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {Object.entries(bloquesAgrupados).map(([bloque, items]) => (
+        <div key={bloque} style={{ marginBottom: '28px' }}>
+          <h2 style={{
+            fontSize: '11px',
+            fontFamily: 'JetBrains Mono, monospace',
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
+            color: '#1a1a1a',
+            margin: '0 0 8px 0',
+            paddingBottom: '6px',
+            borderBottom: '1px solid #1a1a1a',
+          }}>
+            {bloque} <span style={{ color: '#999', fontWeight: 400 }}>· {items.length} variable{items.length > 1 ? 's' : ''}</span>
+          </h2>
+          <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #ddd' }}>
+                <th style={{ textAlign: 'left', padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666', fontWeight: 600, width: '50px' }}>Est.</th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666', fontWeight: 600 }}>Variable</th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666', fontWeight: 600, width: '90px' }}>Prioridad</th>
+                <th style={{ textAlign: 'left', padding: '10px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666', fontWeight: 600 }}>Dónde encontrarlo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, i) => {
+                const est = estadoConfig[item.estado];
+                const pri = prioridadConfig[item.prioridad];
+                const filaId = `${item.bloque}-${item.variable}`;
+                const expandida = filaExpandida === filaId;
+                return (
+                  <React.Fragment key={i}>
+                    <tr className="fila-dato" style={{ borderBottom: expandida ? 'none' : '1px solid #eee', cursor: 'pointer' }}
+                        onClick={() => setFilaExpandida(expandida ? null : filaId)}>
+                      <td style={{ padding: '12px', verticalAlign: 'top' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          width: '14px',
+                          height: '14px',
+                          borderRadius: '50%',
+                          background: est.color,
+                        }} title={est.label}></span>
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '15px', verticalAlign: 'top', fontWeight: 500 }}>
+                        {item.variable}
+                        {item.nota && <div style={{ fontSize: '12px', color: '#666', marginTop: '4px', fontWeight: 400, fontStyle: 'italic' }}>{item.nota}</div>}
+                      </td>
+                      <td style={{ padding: '12px', verticalAlign: 'top' }}>
+                        <span style={{
+                          fontFamily: 'JetBrains Mono, monospace',
+                          fontSize: '10px',
+                          letterSpacing: '0.05em',
+                          textTransform: 'uppercase',
+                          color: pri.color,
+                          fontWeight: 600,
+                        }}>
+                          {pri.label}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px', verticalAlign: 'top' }}>
+                        <span className={`ref-source ${refTipoConfig[item.refTipo]}`}>{item.refCorta}</span>
+                        <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+                          {expandida ? '▾ Cerrar referencia completa' : '▸ Ver referencia completa'}
+                        </div>
+                      </td>
+                    </tr>
+                    {expandida && (
+                      <tr style={{ borderBottom: '1px solid #eee', background: '#f8f5ec' }}>
+                        <td></td>
+                        <td colSpan="3" style={{ padding: '12px 16px 16px 12px', fontSize: '13px', color: '#333', lineHeight: 1.6 }}>
+                          <strong style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#666', display: 'block', marginBottom: '6px' }}>Referencia exacta</strong>
+                          {item.donde}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ))}
+
+      {datosFiltrados.length === 0 && (
+        <div style={{ padding: '40px', textAlign: 'center', background: '#fff', border: '1px dashed #ccc', color: '#999', fontStyle: 'italic' }}>
+          No hay variables que coincidan con los filtros seleccionados
+        </div>
+      )}
+
+      <div style={{ marginTop: '40px', padding: '20px', background: '#fff', border: '1px solid #ddd' }}>
+        <h3 style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', color: '#1a1a1a', margin: '0 0 16px 0' }}>
+          Leyenda
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', fontSize: '13px' }}>
+          <div>
+            <strong style={{ display: 'block', marginBottom: '8px' }}>Estado de disponibilidad</strong>
+            <div style={{ marginBottom: '6px' }}><span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: '#2d6a4f', marginRight: '8px' }}></span>Verde: recogido en el proyecto o disponible en literatura del proyecto</div>
+            <div style={{ marginBottom: '6px' }}><span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: '#7c5e10', marginRight: '8px' }}></span>Amarillo: parcial, pendiente o reconstruible</div>
+            <div><span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: '#9b2226', marginRight: '8px' }}></span>Rojo: no recogido. Necesita acción</div>
+          </div>
+          <div>
+            <strong style={{ display: 'block', marginBottom: '8px' }}>Tipo de fuente</strong>
+            <div style={{ marginBottom: '4px' }}><span className="ref-source proyecto">proyecto</span> Documentación del proyecto (Solicitud, Justificación Intermedia)</div>
+            <div style={{ marginBottom: '4px' }}><span className="ref-source literatura">literatura</span> Artículos del propio proyecto (Fernández-Ferro, Lazaro-Hernandez, Gago-Veiga, SAFE-CGRP)</div>
+            <div style={{ marginBottom: '4px' }}><span className="ref-source externo">externo</span> Datos disponibles fuera del proyecto (INE, farmacia hospitalaria, SEN)</div>
+            <div><span className="ref-source no-recogido">no-recogido</span> No existe; requiere recogerlo o estimarlo</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '32px', padding: '24px', background: '#1a1a1a', color: '#faf8f3' }}>
+        <h3 style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', letterSpacing: '0.15em', textTransform: 'uppercase', margin: '0 0 16px 0', color: '#faf8f3' }}>
+          Acciones críticas inmediatas
+        </h3>
+        <ol style={{ margin: 0, paddingLeft: '24px', lineHeight: 1.7, fontSize: '15px' }}>
+          <li><strong>Añadir módulo laboral al CRD:</strong> estado laboral, WPAI, jornada y salario o categoría. Sin esto no hay costes indirectos (66,9 % del exceso de coste según Fernández-Ferro 2024).</li>
+          <li><strong>Añadir módulo HCRU:</strong> urgencias, primaria, hospitalizaciones por paciente y mes (retrospectivo si necesario).</li>
+          <li><strong>Reservar variables del modelo predictivo:</strong> matriz de confusión, sensibilidad, especificidad, VPP, VPN, tiempo de anticipación.</li>
+          <li><strong>Construir tabla de costes unitarios</strong> a partir del presupuesto (pág. 36 Solicitud) y tarifas SNS.</li>
+          <li><strong>Definir método de utilidad:</strong> ponderación por días de migraña + referencias bibliográficas.</li>
+        </ol>
+      </div>
+
+      <footer style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #ddd', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', letterSpacing: '0.05em', color: '#999', textAlign: 'center' }}>
+        Documentos fuente del proyecto: Solicitud PREDIMIGRAINE (PMP22/00158, 42 págs), Borrador Justificación Intermedia (jun 2024, 14 págs), Fernández-Ferro 2024 (Neurología), Lazaro-Hernandez 2024 (J Headache Pain), Gago-Veiga 2025 (J Pain Research), Sanabria-Gago 2025 (Frontiers in Neurology)
+      </footer>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
